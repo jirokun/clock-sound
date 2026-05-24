@@ -11,8 +11,8 @@ constexpr uint8_t STATUS_LED_PIN = 13;
 
 constexpr bool AUTO_START = false;
 
-constexpr uint16_t DEFAULT_TICK_PULSE_MS = 8;
-constexpr uint16_t DEFAULT_TOCK_PULSE_MS = 8;
+constexpr uint16_t DEFAULT_TICK_PULSE_MS = 20;
+constexpr uint16_t DEFAULT_TOCK_PULSE_MS = 20;
 constexpr uint32_t DEFAULT_INTERVAL_MS = 1000;
 
 constexpr uint16_t HARD_MAX_PULSE_MS = 80;
@@ -145,6 +145,15 @@ public:
     digitalWrite(STATUS_LED_PIN, LOW);
   }
 
+  void holdTickGate(bool enabled) {
+    autoMode_ = false;
+    tick_.forceOff();
+    tock_.forceOff();
+    digitalWrite(TICK_SOLENOID_PIN, enabled ? HIGH : LOW);
+    digitalWrite(STATUS_LED_PIN, enabled ? HIGH : LOW);
+    Serial.println(enabled ? F("diagnostic: D5 HIGH") : F("diagnostic: D5 LOW"));
+  }
+
   bool setTickPulseMs(uint32_t value) {
     tick_.setPulseMs(clampPulse(value));
     return value <= maxPulseMs_;
@@ -261,8 +270,10 @@ void printHelp() {
   Serial.println(F("  status"));
   Serial.println(F("  tick"));
   Serial.println(F("  tock"));
-  Serial.println(F("  set tick_ms 8"));
-  Serial.println(F("  set tock_ms 8"));
+  Serial.println(F("  gate on"));
+  Serial.println(F("  gate off"));
+  Serial.println(F("  set tick_ms 20"));
+  Serial.println(F("  set tock_ms 20"));
   Serial.println(F("  set interval_ms 1000"));
   Serial.println(F("  set max_pulse_ms 50"));
   Serial.println(F("notes: pulse_ms 0 disables that sound; recommended pulse range is 3-30ms."));
@@ -331,6 +342,24 @@ void handleSetCommand(char *cursor) {
   Serial.println(unclamped ? F(" updated") : F(" updated (clamped to safe limit)"));
 }
 
+void handleGateCommand(char *cursor) {
+  char *state = nextToken(&cursor);
+  if (state == nullptr) {
+    Serial.println(F("error: usage is gate <on|off>"));
+    return;
+  }
+
+  toLowerAscii(state);
+
+  if (strcmp(state, "on") == 0) {
+    controller.holdTickGate(true);
+  } else if (strcmp(state, "off") == 0) {
+    controller.holdTickGate(false);
+  } else {
+    Serial.println(F("error: usage is gate <on|off>"));
+  }
+}
+
 void handleCommand(char *line) {
   while (*line == ' ' || *line == '\t') {
     ++line;
@@ -360,6 +389,8 @@ void handleCommand(char *line) {
     controller.triggerTick(millis(), true);
   } else if (strcmp(command, "tock") == 0) {
     controller.triggerTock(millis(), true);
+  } else if (strcmp(command, "gate") == 0) {
+    handleGateCommand(cursor);
   } else if (strcmp(command, "set") == 0) {
     handleSetCommand(cursor);
   } else {
